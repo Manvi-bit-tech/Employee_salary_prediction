@@ -1,78 +1,71 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import pickle
 
-# Load the trained Gradient Boosting Classifier model
-model = joblib.load("gradient_boosting_model.pkl")
+# --- Load All Artifacts ---
+try:
+    model = joblib.load("best_model.pkl")
+    scaler = joblib.load("scaler.pkl")
+    with open('label_encoders.pkl', 'rb') as f:
+        le_dict = pickle.load(f)
+except FileNotFoundError:
+    st.error("Error: One or more required files (.pkl) not found. Please run the final notebook.")
+    st.stop()
 
+# --- Page Configuration ---
 st.set_page_config(page_title="Employee Salary Classification", page_icon="💼", layout="centered")
 st.title("💼 Employee Salary Classification App")
-st.markdown("Predict whether an employee earns >50K or ≤50K based on input features.")
+st.markdown("Predict an employee's income class based on their profile.")
 
-# Sidebar inputs
-st.sidebar.header("Input Employee Details")
-age = st.sidebar.slider("Age", 18, 65, 30)
-education = st.sidebar.selectbox("Education Level", [
-    "Bachelors", "HS-grad", "Masters", "Some-college", "Assoc", "PhD"
-])
-occupation = st.sidebar.selectbox("Job Role", [
-    "Tech-support", "Craft-repair", "Other-service", "Sales",
-    "Exec-managerial", "Prof-specialty", "Handlers-cleaners", "Machine-op-inspct",
-    "Adm-clerical", "Farming-fishing", "Transport-moving", "Priv-house-serv",
-    "Protective-serv", "Armed-Forces"
-])
-hours_per_week = st.sidebar.slider("Hours per week", 1, 80, 40)
-experience = st.sidebar.slider("Years of Experience", 0, 40, 5)
+# --- Sidebar Inputs ---
+st.sidebar.header("Enter Employee Details")
+# Input fields wahi rahenge...
+age = st.sidebar.slider("Age", 17, 90, 35)
+workclass = st.sidebar.selectbox("Work Class", le_dict['workclass'].classes_)
+fnlwgt = st.sidebar.number_input("Final Weight (fnlwgt)", min_value=1, value=77516)
+educational_num = st.sidebar.slider("Years of Education", 1, 16, 10)
+marital_status = st.sidebar.selectbox("Marital Status", le_dict['marital-status'].classes_)
+occupation = st.sidebar.selectbox("Occupation", le_dict['occupation'].classes_)
+race = st.sidebar.selectbox("Race", le_dict['race'].classes_)
+gender = st.sidebar.selectbox("Gender", le_dict['gender'].classes_)
+capital_gain = st.sidebar.number_input("Capital Gain", min_value=0, value=0)
+capital_loss = st.sidebar.number_input("Capital Loss", min_value=0, value=0)
+hours_per_week = st.sidebar.slider("Hours per Week", 1, 99, 40)
+native_country = st.sidebar.selectbox("Native Country", le_dict['native-country'].classes_)
 
-# Input DataFrame
-input_df = pd.DataFrame({
-    'age': [age],
-    'education': [education],
-    'occupation': [occupation],
-    'hours-per-week': [hours_per_week],
-    'experience': [experience]
-})
-
-# Label encoding for categorical features
-education_mapping = {
-    "Bachelors": 0, "HS-grad": 1, "Masters": 2,
-    "Some-college": 3, "Assoc": 4, "PhD": 5
+# --- Prepare Data for Prediction ---
+input_data = {
+    'age': age, 'workclass': workclass, 'fnlwgt': fnlwgt, 'educational-num': educational_num,
+    'marital-status': marital_status, 'occupation': occupation, 'race': race,
+    'gender': gender, 'capital-gain': capital_gain, 'capital-loss': capital_loss,
+    'hours-per-week': hours_per_week, 'native-country': native_country,
 }
-occupation_mapping = {
-    "Tech-support": 0, "Craft-repair": 1, "Other-service": 2, "Sales": 3,
-    "Exec-managerial": 4, "Prof-specialty": 5, "Handlers-cleaners": 6,
-    "Machine-op-inspct": 7, "Adm-clerical": 8, "Farming-fishing": 9,
-    "Transport-moving": 10, "Priv-house-serv": 11,
-    "Protective-serv": 12, "Armed-Forces": 13
-}
+input_df = pd.DataFrame([input_data])
 
-input_df['education'] = input_df['education'].map(education_mapping)
-input_df['occupation'] = input_df['occupation'].map(occupation_mapping)
+# --- CRITICAL STEP: Apply saved Label Encoders ---
+for col, le in le_dict.items():
+    if col in input_df.columns:
+        input_df[col] = le.transform(input_df[col])
 
-st.write("### 🔎 Input Data")
-st.write(input_df)
+# --- CRITICAL STEP: Scale the numerical features ---
+numerical_cols = ['age', 'fnlwgt', 'educational-num', 'capital-gain', 'capital-loss', 'hours-per-week']
+input_df[numerical_cols] = scaler.transform(input_df[numerical_cols])
 
-# Predict
-if st.button("Predict Salary Class"):
+# Enforce column order to match model's training
+expected_features = list(le_dict.keys()) + numerical_cols
+# The order must be exactly as it was during training
+expected_features = ['age', 'workclass', 'fnlwgt', 'educational-num', 'marital-status', 'occupation', 'race', 'gender', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country']
+input_df = input_df[expected_features]
+
+
+# --- Prediction ---
+if st.button("Predict Salary Class", type="primary"):
     prediction = model.predict(input_df)
-    st.success(f"✅ Prediction: {prediction[0]}")
+    st.subheader("Prediction Result")
+    # Assuming 1 means '>50K' and 0 means '<=50K'
+    if prediction[0] == 1:
+        st.success("This individual is predicted to earn **more than $50K** per year. 🎉")
+    else:
+        st.info("This individual is predicted to earn **$50K or less** per year.")
 
-# Batch Prediction
-st.markdown("---")
-st.markdown("#### 📂 Batch Prediction")
-uploaded_file = st.file_uploader("Upload a CSV file for batch prediction", type="csv")
-
-if uploaded_file is not None:
-    batch_data = pd.read_csv(uploaded_file)
-    st.write("Uploaded data preview:", batch_data.head())
-
-    batch_data['education'] = batch_data['education'].map(education_mapping)
-    batch_data['occupation'] = batch_data['occupation'].map(occupation_mapping)
-
-    batch_preds = model.predict(batch_data)
-    batch_data['PredictedClass'] = batch_preds
-    st.write("✅ Predictions:")
-    st.write(batch_data.head())
-
-    csv = batch_data.to_csv(index=False).encode('utf-8')
-    st.download_button("Download Predictions CSV", csv, file_name='predicted_classes.csv', mime='text/csv')
