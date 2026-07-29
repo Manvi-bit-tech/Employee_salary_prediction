@@ -48,7 +48,7 @@ Manually predicting or benchmarking employee salaries is time-consuming and pron
 
 1. User provides employee details via sidebar or CSV upload.
 2. Input is preprocessed (encoding categorical values).
-3. Trained ML model (`RandomForestClassifier`) makes a prediction.
+3. Trained ML model (`GradientBoostingClassifier`) makes a prediction.
 4. Results are displayed on the interface and available for download.
 
 ---
@@ -77,7 +77,7 @@ streamlit run app.py
 
 ## 📊 Results
 
-- **Model Used**: Random Forest Classifier  
+- **Model Used**: Gradient Boosting Model 
 - **Accuracy**: ~87%  
 - **Performance**: Good precision and recall for both salary classes  
 - **Deployment**: Streamlit UI for easy interaction
@@ -95,7 +95,7 @@ streamlit run app.py
 
 ## 🔗 Live Demo & Resources
 
-- 🖥️ Streamlit App: *[Insert Streamlit link here]*  
+- 🖥️ Streamlit App: https://employee-salary-prediction-md.streamlit.app  
 - 💻 GitHub Repo: https://github.com/Manvi-bit-tech/Employee_Salary_Prediction
 
 ---
